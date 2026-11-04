@@ -22,6 +22,22 @@ Install the tools required for your project's languages:
 Missing tools trigger installation instructions; fmt-sync does not install them automatically.
 Ruff and Biome are resolved from the project first, then PATH. Cargo/rustup selects the Rust toolchain.
 
+### AI agent skill
+
+Install the skill with the [skills CLI](https://github.com/vercel-labs/skills) (Node.js 22.20+):
+
+```sh
+# Codex
+npx skills add dongqifong/fmt-sync --skill fmt-sync --agent codex
+
+# Claude Code
+npx skills add dongqifong/fmt-sync --skill fmt-sync --agent claude-code
+```
+
+Add `-g` to install for all projects. The skill teaches the agent to run checks only when requested, not after every code edit. It does not install fmt-sync or its native tools.
+
+Ask the agent to check your project, or invoke `$fmt-sync` in Codex / `/fmt-sync` in Claude Code.
+
 ## Usage
 
 Run from the project directory:

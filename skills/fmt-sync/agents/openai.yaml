@@ -1,0 +1,4 @@
+interface:
+  display_name: "fmt-sync"
+  short_description: "Check formatting and lint only when requested"
+  default_prompt: "Use $fmt-sync to check this project for formatting and lint issues without modifying source files."
