@@ -1,0 +1,3 @@
+schema-version = 1
+languages = ["typescript"]
+ignore = ["legacy/"]

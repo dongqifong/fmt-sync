@@ -1,0 +1,28 @@
+[package]
+name = "fmt-sync"
+version = "1.0.0"
+edition = "2024"
+description = "Project-local formatting and lint orchestration for Python, Go, Rust and TypeScript"
+license = "MIT"
+readme = "README.md"
+
+[dependencies]
+anyhow = "1.0.104"
+anstream = "1.0.0"
+clap = { version = "4.6.7", features = ["derive"] }
+ignore = "0.4.34"
+jsonc-parser = { version = "0.34.0", features = ["serde"] }
+proc-macro2 = "1.0.107"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+syn = { version = "3.0.9", features = ["full", "parsing"] }
+toml = "1.2.0"
+toml_edit = "0.25.18"
+
+[dev-dependencies]
+tempfile = "3.27.0"
+
+[profile.release]
+strip = true
+lto = "thin"
+

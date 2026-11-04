@@ -1,0 +1,106 @@
+# Project build output and scratch files
+target/
+/.scratch/
+/tests/.runs/
+
+# Rust fixture lockfiles and profiling output
+/tests/projects/rust/Cargo.lock
+/tests/projects/rust/legacy/Cargo.lock
+*.profraw
+*.profdata
+
+# Local environment files; keep shareable templates
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+!.env.*.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+.eggs/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pytype/
+.pyre/
+.tox/
+.nox/
+.coverage
+.coverage.*
+htmlcov/
+
+# Go
+/bin/
+*.test
+*.test.exe
+coverage.out
+
+# TypeScript / JavaScript
+node_modules/
+.npm/
+.pnpm-store/
+.yarn/cache/
+.yarn/unplugged/
+.yarn/build-state.yml
+.yarn/install-state.gz
+.pnp.*
+*.tsbuildinfo
+.eslintcache
+.stylelintcache
+.next/
+.nuxt/
+.output/
+.svelte-kit/
+.turbo/
+.parcel-cache/
+.vite/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Shared build output and coverage reports
+build/
+dist/
+coverage/
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+[Dd]esktop.ini
+$RECYCLE.BIN/
+*.stackdump
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.DocumentRevisions-V100/
+.Spotlight-V100/
+.TemporaryItems/
+.Trashes/
+.VolumeIcon.icns
+.fseventsd/
+
+# Linux
+.directory
+.Trash-*/
+.nfs*
+
+# Editor temporary files and backups
+*~
+*.swp
+*.swo
+*.orig
+
+docs/
