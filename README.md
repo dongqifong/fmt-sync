@@ -106,3 +106,11 @@ For example, a preset can contain `ruff.toml`, `rustfmt.toml`, and `biome.json`.
 - **Formatting:** Tabs, line width 80, double quotes.
 - **Lint:** Biome's recommended rules.
 - **Cache:** Normal runs do not create a project cache.
+
+## Uninstallation
+
+To uninstall fmt-sync, run:
+
+```sh
+cargo uninstall fmt-sync
+```
