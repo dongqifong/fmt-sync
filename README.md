@@ -1,5 +1,8 @@
 # fmt-sync
 
+[![Version](https://img.shields.io/badge/dynamic/toml?url=https%3A%2F%2Fraw.githubusercontent.com%2Fdongqifong%2Ffmt-sync%2Fmain%2FCargo.toml&query=%24.package.version&label=version&prefix=v&color=blue)](https://github.com/dongqifong/fmt-sync/blob/main/Cargo.toml)
+[![CI](https://github.com/dongqifong/fmt-sync/actions/workflows/ci.yml/badge.svg?branch=main&event=push)](https://github.com/dongqifong/fmt-sync/actions/workflows/ci.yml)
+
 Format and lint Python, Go, Rust, and TypeScript projects with the same commands. Supports Windows and Linux.
 
 ## Installation
