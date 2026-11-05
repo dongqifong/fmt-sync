@@ -336,6 +336,84 @@ fn rust_metadata(root: &Path, source: &str) -> String {
 }
 
 #[test]
+fn rust_format_preflight_failure_does_not_suppress_clippy() {
+    for invalid_native_config in [false, true] {
+        let dir = project("rust");
+        write(
+            dir.path(),
+            "Cargo.toml",
+            "[package]\nname = 'demo'\nversion = '0.1.0'\nedition = '2024'\n",
+        );
+        if invalid_native_config {
+            write(dir.path(), "rustfmt.toml", "invalid = [");
+            write(dir.path(), "src/main.rs", "fn main() {}\n");
+        } else {
+            write(
+                dir.path(),
+                "src/main.rs",
+                "#[path = \"child.rs\"]\nmod child;\nfn main() {}\n",
+            );
+            write(dir.path(), "src/child.rs", "pub fn hello() {}\n");
+        }
+        let tools = TempDir::new().unwrap();
+        install_tool(tools.path(), "cargo");
+        let metadata = rust_metadata(dir.path(), "src/main.rs");
+        let out = run(
+            dir.path(),
+            &["check"],
+            tools.path(),
+            &[("FAKE_METADATA", &metadata)],
+        );
+        assert_code(&out, 2);
+        let commands = operations(dir.path(), "cargo");
+        assert!(
+            commands
+                .iter()
+                .any(|a| a.first().is_some_and(|s| s == "clippy")),
+            "{}",
+            text(&out)
+        );
+        assert!(
+            !commands
+                .iter()
+                .any(|a| a.first().is_some_and(|s| s == "fmt"))
+        );
+        assert!(text(&out).contains("rust format [error]"));
+        assert!(text(&out).contains("rust lint [passed]"));
+    }
+}
+
+#[test]
+fn python_import_metadata_failure_still_runs_safe_formatter() {
+    let dir = project("python");
+    write(dir.path(), "main.py", "import sys\n");
+    let tools = TempDir::new().unwrap();
+    install_tool(tools.path(), "ruff");
+    let out = run(
+        dir.path(),
+        &["format"],
+        tools.path(),
+        &[("FAKE_RUFF_BAD_METADATA", "1")],
+    );
+    assert_code(&out, 2);
+    let commands = operations(dir.path(), "ruff");
+    assert!(
+        commands
+            .iter()
+            .any(|a| a.first().is_some_and(|s| s == "format")),
+        "{}",
+        text(&out)
+    );
+    assert!(
+        !commands
+            .iter()
+            .any(|a| a.first().is_some_and(|s| s == "check"))
+    );
+    assert!(text(&out).contains("python imports [error]"));
+    assert!(text(&out).contains("python format [passed]"));
+}
+
+#[test]
 fn cargo_commands_select_only_the_current_package() {
     let dir = project("rust");
     write(
@@ -451,6 +529,41 @@ fn large_go_file_sets_are_batched_without_losing_targets() {
             .count(),
         140
     );
+}
+
+#[test]
+fn later_successful_batches_do_not_erase_earlier_errors() {
+    let dir = project("go");
+    write(dir.path(), "000_error.go", "package demo\n");
+    for i in 0..140 {
+        write(
+            dir.path(),
+            &format!("src/long_directory_name_{i:04}/file_with_long_name_{i:04}.go"),
+            "package demo\n",
+        );
+    }
+    let tools = TempDir::new().unwrap();
+    install_tool(tools.path(), "gofmt");
+    install_tool(tools.path(), "go");
+    let out = run(
+        dir.path(),
+        &["format"],
+        tools.path(),
+        &[("FAKE_FAILURE_PATH", "000_error.go")],
+    );
+    assert_code(&out, 2);
+    let commands = operations(dir.path(), "gofmt");
+    assert!(commands.len() > 1);
+    assert!(commands[0].iter().any(|arg| arg.ends_with("000_error.go")));
+    assert!(
+        !commands
+            .last()
+            .unwrap()
+            .iter()
+            .any(|arg| arg.ends_with("000_error.go"))
+    );
+    assert!(text(&out).contains("go format [error]"));
+    assert!(text(&out).contains("gofmt: fixture diagnostic"));
 }
 
 #[test]

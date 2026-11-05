@@ -4,9 +4,7 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 
 use crate::{
-    adapters,
-    config::{Config, Language},
-    init, report, update,
+    config::Config, execution::RunMode, init, language::Language, orchestrator, report, update,
 };
 
 #[derive(Parser)]
@@ -62,7 +60,15 @@ fn dispatch(cli: Cli) -> Result<i32> {
         }
         Action::Format | Action::Check => {
             let config = Config::load(&root)?;
-            let results = adapters::execute(&root, &config, matches!(cli.command, Action::Check));
+            let results = orchestrator::execute(
+                &root,
+                &config,
+                if matches!(cli.command, Action::Check) {
+                    RunMode::Check
+                } else {
+                    RunMode::Format
+                },
+            );
             Ok(report::print(&results))
         }
         Action::Update => unreachable!(),

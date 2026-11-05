@@ -86,8 +86,8 @@ fn update() -> Result<()> {
             ensure!(status.success(), "Cargo installation failed ({status})");
             Ok(())
         });
+    #[cfg(windows)]
     if let Err(error) = installed {
-        #[cfg(windows)]
         if let Some(backup) = &mut backup {
             backup.restore().with_context(|| {
                 format!(
@@ -98,6 +98,8 @@ fn update() -> Result<()> {
         }
         return Err(error);
     }
+    #[cfg(not(windows))]
+    installed?;
     #[cfg(windows)]
     if let Some(backup) = &mut backup {
         backup.committed = true;

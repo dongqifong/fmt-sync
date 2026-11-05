@@ -1,13 +1,23 @@
+use anyhow::{Context, Result, ensure};
+use jsonc_parser::ParseOptions;
+use serde_json::Value;
 use std::{
     fs,
     path::{Path, PathBuf},
 };
 
-use anyhow::{Context, Result, bail, ensure};
-use jsonc_parser::ParseOptions;
-use serde_json::Value;
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum ConfigSource {
+    Project,
+    Preset,
+}
 
-use crate::config::Language;
+pub struct NativeConfigSpec {
+    pub project_files: &'static [&'static str],
+    pub preset_files: &'static [&'static str],
+    pub default: Option<(&'static str, &'static str)>,
+    pub validate: fn(&Path, &str, ConfigSource) -> Result<bool>,
+}
 
 pub struct NativeConfig {
     pub path: PathBuf,
@@ -20,7 +30,7 @@ pub fn read_json(path: &Path) -> Result<Value> {
     parse_json(&content, path)
 }
 
-fn parse_json(content: &str, path: &Path) -> Result<Value> {
+pub fn parse_json(content: &str, path: &Path) -> Result<Value> {
     let comments = path.extension().is_some_and(|x| x == "jsonc");
     let options = ParseOptions {
         allow_comments: comments,
@@ -38,160 +48,60 @@ fn parse_json(content: &str, path: &Path) -> Result<Value> {
         .with_context(|| format!("Failed to parse {}", path.display()))
 }
 
-pub fn discover(root: &Path, lang: Language) -> Result<Option<NativeConfig>> {
-    if lang == Language::Go {
+pub fn discover(root: &Path, spec: Option<&NativeConfigSpec>) -> Result<Option<NativeConfig>> {
+    let Some(spec) = spec else {
         return Ok(None);
-    }
-    let names: &[&str] = match lang {
-        Language::Python => &[".ruff.toml", "ruff.toml", "pyproject.toml"],
-        Language::Rust => &["rustfmt.toml", ".rustfmt.toml"],
-        Language::Typescript => &["biome.json", "biome.jsonc"],
-        Language::Go => unreachable!(),
     };
     let mut chosen = None;
-    for name in names {
+    for name in spec.project_files {
         let path = root.join(name);
         if !path.try_exists()? {
             continue;
         }
-        ensure!(
-            path.is_file() && !path.is_symlink(),
-            "Native configuration must be a regular file: {}",
-            path.display()
-        );
-        let content = fs::read_to_string(&path)?;
-        let relevant = validate(&path, &content, lang, false)?;
-        if relevant && chosen.is_none() {
-            chosen = Some(NativeConfig { path, content });
+        let config = read_config(path, spec, ConfigSource::Project)?;
+        if chosen.is_none() {
+            chosen = config;
         }
     }
     Ok(chosen)
 }
 
-fn validate(path: &Path, content: &str, lang: Language, preset: bool) -> Result<bool> {
-    if lang == Language::Typescript {
-        let parsed = parse_json(content, path)?;
-        ensure!(
-            parsed.is_object(),
-            "Biome configuration must be a JSON object: {}",
-            path.display()
-        );
-        if preset {
-            ensure!(
-                parsed.get("extends").is_none(),
-                "Presets do not support extends: {}",
-                path.display()
-            );
-        }
-        return Ok(true);
-    }
-    let parsed: toml::Value =
-        toml::from_str(content).with_context(|| format!("Failed to parse {}", path.display()))?;
-    if path.file_name().is_some_and(|x| x == "pyproject.toml") {
-        let section = parsed.get("tool").and_then(|x| x.get("ruff"));
-        if let Some(section) = section {
-            ensure!(section.is_table(), "tool.ruff must be a table");
-        }
-        return Ok(section.is_some());
-    }
-    if preset {
-        ensure!(
-            parsed.get("extend").is_none() && parsed.get("extends").is_none(),
-            "Presets do not support extend/extends: {}",
-            path.display()
-        );
-    }
-    Ok(true)
-}
-
-pub fn preset_config(root: &Path, lang: Language) -> Result<Option<NativeConfig>> {
-    let names: &[&str] = match lang {
-        Language::Python => &["ruff.toml", ".ruff.toml"],
-        Language::Rust => &["rustfmt.toml", ".rustfmt.toml"],
-        Language::Typescript => &["biome.json", "biome.jsonc"],
-        Language::Go => &[],
+pub fn preset_config(
+    root: &Path,
+    language: impl std::fmt::Display,
+    spec: Option<&NativeConfigSpec>,
+) -> Result<Option<NativeConfig>> {
+    let Some(spec) = spec else {
+        return Ok(None);
     };
-    let found: Vec<_> = names
+    let found: Vec<_> = spec
+        .preset_files
         .iter()
-        .map(|n| root.join(n))
-        .filter(|p| p.exists())
+        .map(|name| root.join(name))
+        .filter(|path| path.exists())
         .collect();
     ensure!(
         found.len() <= 1,
-        "The preset contains multiple configuration files for {lang}"
+        "The preset contains multiple configuration files for {language}"
     );
-    match found.into_iter().next() {
-        Some(path) => {
-            ensure!(
-                path.is_file() && !path.is_symlink(),
-                "Preset configuration must be a regular file: {}",
-                path.display()
-            );
-            let content = fs::read_to_string(&path)?;
-            validate(&path, &content, lang, true)?;
-            Ok(Some(NativeConfig { path, content }))
-        }
-        None => Ok(None),
-    }
+    found
+        .into_iter()
+        .next()
+        .map(|path| read_config(path, spec, ConfigSource::Preset))
+        .transpose()
+        .map(Option::flatten)
 }
 
-pub fn defaults(lang: Language) -> Option<(&'static str, &'static str)> {
-    match lang {
-        Language::Python => Some((
-            "ruff.toml",
-            "line-length = 88\n\n[lint]\nselect = [\"E4\", \"E7\", \"E9\", \"F\", \"I\"]\n",
-        )),
-        Language::Rust => Some((
-            "rustfmt.toml",
-            "# Use rustfmt stable defaults; edit this file to customize.\n",
-        )),
-        Language::Typescript => Some((
-            "biome.json",
-            "{\n  \"formatter\": { \"enabled\": true },\n  \"linter\": { \"enabled\": true }\n}\n",
-        )),
-        Language::Go => None,
-    }
-}
-
-pub fn check_typescript_conflicts(root: &Path) -> Result<()> {
-    let names = [
-        ".eslintrc",
-        ".eslintrc.json",
-        ".eslintrc.js",
-        ".eslintrc.cjs",
-        ".eslintrc.yaml",
-        ".eslintrc.yml",
-        "eslint.config.js",
-        "eslint.config.mjs",
-        "eslint.config.cjs",
-        "eslint.config.ts",
-        "eslint.config.mts",
-        "eslint.config.cts",
-        ".prettierrc",
-        ".prettierrc.json",
-        ".prettierrc.json5",
-        ".prettierrc.yaml",
-        ".prettierrc.yml",
-        ".prettierrc.js",
-        ".prettierrc.cjs",
-        ".prettierrc.mjs",
-        ".prettierrc.toml",
-        "prettier.config.js",
-        "prettier.config.cjs",
-        "prettier.config.mjs",
-        "prettier.config.ts",
-    ];
-    let manifest = root.join("package.json");
-    let package_conflict = if manifest.is_file() {
-        let value = read_json(&manifest)?;
-        value.get("eslintConfig").is_some() || value.get("prettier").is_some()
-    } else {
-        false
-    };
-    if package_conflict || names.iter().any(|name| root.join(name).exists()) {
-        bail!(
-            "Existing ESLint/Prettier configuration found; resolve overlapping tools before initializing Biome. Automatic migration is not supported"
-        );
-    }
-    Ok(())
+fn read_config(
+    path: PathBuf,
+    spec: &NativeConfigSpec,
+    source: ConfigSource,
+) -> Result<Option<NativeConfig>> {
+    ensure!(
+        path.is_file() && !path.is_symlink(),
+        "Native configuration must be a regular file: {}",
+        path.display()
+    );
+    let content = fs::read_to_string(&path)?;
+    Ok((spec.validate)(&path, &content, source)?.then_some(NativeConfig { path, content }))
 }

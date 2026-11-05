@@ -1,4 +1,4 @@
-use crate::config::{CONFIG_FILE, Config, Language, is_link_like};
+use crate::paths::{CONFIG_FILE, is_link_like};
 use anyhow::{Context, Result};
 use ignore::WalkBuilder;
 use std::{
@@ -6,59 +6,58 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+#[derive(Clone, Copy)]
+pub enum ScanPolicy {
+    AllFiles,
+    RespectGitignore,
+}
+
 pub struct Scope {
+    root: PathBuf,
+    ignored: Vec<PathBuf>,
     pub files: Vec<PathBuf>,
-    pub go_files: Vec<PathBuf>,
-    pub go_packages: Vec<PathBuf>,
     pub excluded_projects: Vec<PathBuf>,
 }
 
 impl Scope {
-    pub fn discover(root: &Path, config: &Config) -> Result<Self> {
+    pub fn discover(root: &Path, ignored: &[PathBuf]) -> Result<Self> {
         let root = root.canonicalize()?;
-        let ignored = config.normalized_ignores(&root)?;
-        let (files, excluded_projects) = collect(&root, &ignored, false)?;
-        let go_files = if config.languages.contains(&Language::Go) {
-            collect(&root, &ignored, true)?
-                .0
-                .into_iter()
-                .filter(|p| p.extension().is_some_and(|ext| ext == "go"))
-                .collect()
-        } else {
-            Vec::new()
-        };
-        let mut go_packages = std::collections::BTreeSet::new();
-        for file in &files {
-            if file.extension().is_some_and(|ext| ext == "go") {
-                let parent = file.parent().unwrap_or(Path::new(""));
-                let native_excluded = parent.components().any(|c| {
-                    let text = c.as_os_str().to_string_lossy();
-                    text.starts_with('.') || text.starts_with('_') || text == "testdata"
-                });
-                let filename = file.file_name().unwrap().to_string_lossy();
-                if !native_excluded && !filename.starts_with(['.', '_']) {
-                    go_packages.insert(if parent.as_os_str().is_empty() {
-                        PathBuf::from(".")
-                    } else {
-                        parent.to_path_buf()
-                    });
-                }
-            }
-        }
+        let (files, excluded_projects) = collect(&root, ignored, ScanPolicy::AllFiles)?;
         Ok(Self {
+            root,
+            ignored: ignored.to_vec(),
             files,
-            go_files,
-            go_packages: go_packages.into_iter().collect(),
             excluded_projects,
         })
+    }
+
+    pub fn root(&self) -> &Path {
+        &self.root
+    }
+
+    pub fn scan(&self, policy: ScanPolicy) -> Result<Vec<PathBuf>> {
+        collect(&self.root, &self.ignored, policy).map(|(files, _)| files)
+    }
+
+    pub fn files_with_extensions(&self, extensions: &[&str]) -> Vec<PathBuf> {
+        self.files
+            .iter()
+            .filter(|path| {
+                path.extension()
+                    .and_then(|s| s.to_str())
+                    .is_some_and(|extension| extensions.contains(&extension))
+            })
+            .cloned()
+            .collect()
     }
 }
 
 fn collect(
     root: &Path,
     ignored: &[PathBuf],
-    respect_gitignore: bool,
+    policy: ScanPolicy,
 ) -> Result<(Vec<PathBuf>, Vec<PathBuf>)> {
+    let respect_gitignore = matches!(policy, ScanPolicy::RespectGitignore);
     let ignored = ignored.to_vec();
     let excluded = Arc::new(Mutex::new(ignored.clone()));
     let collected = Arc::clone(&excluded);
@@ -131,6 +130,7 @@ fn collect(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::Config;
     use std::fs;
     use tempfile::TempDir;
 
@@ -164,7 +164,14 @@ mod tests {
             "independent/fmt-sync.toml",
             "invalid but irrelevant",
         );
-        let scope = Scope::discover(dir.path(), &Config::load(dir.path()).unwrap()).unwrap();
+        let scope = Scope::discover(
+            dir.path(),
+            &Config::load(dir.path())
+                .unwrap()
+                .normalized_ignores(dir.path())
+                .unwrap(),
+        )
+        .unwrap();
         assert!(scope.files.contains(&PathBuf::from("src/main.py")));
         assert!(scope.files.contains(&PathBuf::from("src/helper.ts")));
         assert!(
@@ -198,9 +205,17 @@ mod tests {
         write(dir.path(), ".gitignore", "generated/\n");
         write(dir.path(), "generated/tool.go", "package generated");
         write(dir.path(), "main.go", "package main");
-        let scope = Scope::discover(dir.path(), &Config::load(dir.path()).unwrap()).unwrap();
-        assert!(scope.go_files.contains(&PathBuf::from("main.go")));
-        assert!(!scope.go_files.contains(&PathBuf::from("generated/tool.go")));
+        let scope = Scope::discover(
+            dir.path(),
+            &Config::load(dir.path())
+                .unwrap()
+                .normalized_ignores(dir.path())
+                .unwrap(),
+        )
+        .unwrap();
+        let files = scope.scan(ScanPolicy::RespectGitignore).unwrap();
+        assert!(files.contains(&PathBuf::from("main.go")));
+        assert!(!files.contains(&PathBuf::from("generated/tool.go")));
     }
 
     #[test]
@@ -216,7 +231,14 @@ mod tests {
         );
         write(dir.path(), "source caf\u{e9}/hello.py", "");
         write(dir.path(), "legacy caf\u{e9}/hello.py", "");
-        let scope = Scope::discover(dir.path(), &Config::load(dir.path()).unwrap()).unwrap();
+        let scope = Scope::discover(
+            dir.path(),
+            &Config::load(dir.path())
+                .unwrap()
+                .normalized_ignores(dir.path())
+                .unwrap(),
+        )
+        .unwrap();
         assert!(
             scope
                 .files
@@ -241,7 +263,14 @@ mod tests {
         );
         write(outside.path(), "secret.py", "");
         std::os::unix::fs::symlink(outside.path(), dir.path().join("linked")).unwrap();
-        let scope = Scope::discover(dir.path(), &Config::load(dir.path()).unwrap()).unwrap();
+        let scope = Scope::discover(
+            dir.path(),
+            &Config::load(dir.path())
+                .unwrap()
+                .normalized_ignores(dir.path())
+                .unwrap(),
+        )
+        .unwrap();
         assert!(!scope.files.contains(&PathBuf::from("linked/secret.py")));
     }
 }

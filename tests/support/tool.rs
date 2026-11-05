@@ -26,6 +26,10 @@ fn main() {
         println!("{}", env::var("FAKE_GIT_TAGS").unwrap_or_default());
     }
     if tool == "ruff" && args.first().is_some_and(|a| a == "linter") {
+        if env::var("FAKE_RUFF_BAD_METADATA").is_ok() {
+            println!("invalid metadata");
+            return;
+        }
         println!("{}", r#"[{"prefix":"","categories":[{"prefix":"E"},{"prefix":"W"}]},{"prefix":"F"},{"prefix":"I"}]"#);
         return;
     }
@@ -33,7 +37,11 @@ fn main() {
         println!("main.go");
     }
     let key = format!("FAKE_{}_EXIT", tool.to_uppercase());
-    let code = env::var(key).ok().and_then(|s| s.parse().ok()).unwrap_or(0);
+    let code = if env::var("FAKE_FAILURE_PATH").is_ok_and(|path| args.iter().any(|arg| arg.ends_with(&path))) {
+        2
+    } else {
+        env::var(key).ok().and_then(|s| s.parse().ok()).unwrap_or(0)
+    };
     if tool == "cargo" && args.first().is_some_and(|a| a == "install") {
         if let Ok(forbidden) = env::var("FAKE_FORBIDDEN_CWD") {
             assert_ne!(env::current_dir().unwrap(), Path::new(&forbidden));

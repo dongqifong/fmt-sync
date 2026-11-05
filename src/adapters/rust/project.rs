@@ -20,8 +20,8 @@ struct Metadata {
     packages: Vec<Package>,
 }
 #[derive(Deserialize)]
-struct Package {
-    name: String,
+pub struct Package {
+    pub name: String,
     manifest_path: PathBuf,
     targets: Vec<Target>,
 }
@@ -30,7 +30,7 @@ struct Target {
     src_path: PathBuf,
 }
 
-pub fn prepare(root: &Path, scope: &Scope, cargo: &Tool) -> Result<String> {
+pub fn discover(root: &Path, cargo: &Tool) -> Result<Package> {
     let root = root.canonicalize()?;
     let manifest = root.join("Cargo.toml");
     ensure!(
@@ -58,6 +58,11 @@ pub fn prepare(root: &Path, scope: &Scope, cargo: &Tool) -> Result<String> {
         .into_iter()
         .find(|p| p.manifest_path.canonicalize().is_ok_and(|p| p == manifest))
         .context("The current package was not found in metadata")?;
+    Ok(package)
+}
+
+pub fn validate_format_scope(root: &Path, scope: &Scope, package: &Package) -> Result<()> {
+    let root = root.canonicalize()?;
     let mut visited = HashSet::new();
     for target in &package.targets {
         // Lexical parent components are rejected before canonicalization for a clear scope error.
@@ -81,7 +86,7 @@ pub fn prepare(root: &Path, scope: &Scope, cargo: &Tool) -> Result<String> {
             &mut visited,
         )?;
     }
-    Ok(package.name)
+    Ok(())
 }
 
 fn validate_file(root: &Path, path: &Path, scope: &Scope) -> Result<()> {

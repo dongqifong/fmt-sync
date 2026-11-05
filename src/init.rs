@@ -7,10 +7,7 @@ use std::{
 use anyhow::{Context, Result, ensure};
 use toml_edit::{Array, DocumentMut, value};
 
-use crate::{
-    config::{CONFIG_FILE, Config, Language},
-    native,
-};
+use crate::{config::Config, language::Language, native, paths::CONFIG_FILE};
 
 pub fn initialize(
     root: &Path,
@@ -52,16 +49,16 @@ pub fn initialize(
     let mut writes = Vec::new();
     // Preflight every selected language before creating any files.
     for lang in &selected {
-        if let Some(config) = native::discover(root, *lang)? {
+        let adapter = lang.adapter();
+        let spec = adapter.native_config();
+        if let Some(config) = native::discover(root, spec.as_ref())? {
             messages.push(format!("{lang}: keeping {}", config.path.display()));
             continue;
         }
-        if *lang == Language::Typescript {
-            native::check_typescript_conflicts(root)?;
-        }
+        adapter.check_init_conflicts(root)?;
         let template = preset
             .as_ref()
-            .map(|p| native::preset_config(p, *lang))
+            .map(|p| native::preset_config(p, *lang, spec.as_ref()))
             .transpose()?
             .flatten();
         if let Some(template) = template {
@@ -71,7 +68,7 @@ pub fn initialize(
                 .context("Preset file has no filename")?;
             writes.push((root.join(name), template.content));
             messages.push(format!("{lang}: using preset {}", template.path.display()));
-        } else if let Some((name, content)) = native::defaults(*lang) {
+        } else if let Some((name, content)) = spec.and_then(|spec| spec.default) {
             writes.push((root.join(name), content.to_string()));
             messages.push(format!("{lang}: using built-in defaults from {name}"));
         } else {

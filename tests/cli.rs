@@ -225,6 +225,27 @@ fn invalid_schema_and_empty_languages_are_rejected() {
 }
 
 #[test]
+fn tool_version_keys_come_from_registered_tools() {
+    let dir = TempDir::new().unwrap();
+    write(
+        dir.path(),
+        "fmt-sync.toml",
+        "schema-version = 1\nlanguages = ['python']\n[tool-versions]\nruff = '1.2.3'\ngo = '1.2.3'\ncargo = '1.2.3'\nrustfmt = '1.2.3'\nclippy = '1.2.3'\nbiome = '1.2.3'\n",
+    );
+    // With no sources, known requirements are validated without launching tools.
+    ok(cli(dir.path(), &["check"]));
+    for entry in ["unknown = '1.2.3'", "ruff = ' '"] {
+        write(
+            dir.path(),
+            "fmt-sync.toml",
+            &format!("schema-version = 1\nlanguages = ['python']\n[tool-versions]\n{entry}\n"),
+        );
+        let out = cli(dir.path(), &["check"]);
+        assert_eq!(out.status.code(), Some(2));
+    }
+}
+
+#[test]
 fn ignore_rejects_files_absolute_paths_and_escaping_paths() {
     let dir = TempDir::new().unwrap();
     write(dir.path(), "main.py", "print('hello')\n");
