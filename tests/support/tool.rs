@@ -22,6 +22,9 @@ fn main() {
         println!("{}", env::var("FAKE_METADATA").expect("fixture needs metadata"));
         return;
     }
+    if tool == "git" && args.first().is_some_and(|a| a == "ls-remote") {
+        println!("{}", env::var("FAKE_GIT_TAGS").unwrap_or_default());
+    }
     if tool == "ruff" && args.first().is_some_and(|a| a == "linter") {
         println!("{}", r#"[{"prefix":"","categories":[{"prefix":"E"},{"prefix":"W"}]},{"prefix":"F"},{"prefix":"I"}]"#);
         return;
@@ -31,6 +34,21 @@ fn main() {
     }
     let key = format!("FAKE_{}_EXIT", tool.to_uppercase());
     let code = env::var(key).ok().and_then(|s| s.parse().ok()).unwrap_or(0);
+    if tool == "cargo" && args.first().is_some_and(|a| a == "install") {
+        if let Ok(forbidden) = env::var("FAKE_FORBIDDEN_CWD") {
+            assert_ne!(env::current_dir().unwrap(), Path::new(&forbidden));
+        }
+        if let Ok(executable) = env::var("FAKE_VERIFY_EXISTING_EXE") {
+            assert!(std::process::Command::new(executable).arg("--version").output().unwrap().status.success());
+        }
+        if code == 0 {
+            if let Ok(destination) = env::var("FAKE_INSTALL_DEST") {
+                let staged = Path::new(&destination).with_extension("staged");
+                std::fs::copy(env::var("FAKE_INSTALL_SOURCE").unwrap(), &staged).unwrap();
+                std::fs::rename(staged, destination).unwrap();
+            }
+        }
+    }
     if code != 0 { eprintln!("{tool}: fixture diagnostic"); }
     std::process::exit(code);
 }

@@ -107,6 +107,14 @@ For example, a preset can contain `ruff.toml`, `rustfmt.toml`, and `biome.json`.
 - **Lint:** Biome's recommended rules.
 - **Cache:** Normal runs do not create a project cache.
 
+## Updating
+
+To update fmt-sync, run:
+
+```sh
+fmt-sync update
+```
+
 ## Uninstallation
 
 To uninstall fmt-sync, run:

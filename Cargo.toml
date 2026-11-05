@@ -1,6 +1,6 @@
 [package]
 name = "fmt-sync"
-version = "1.0.0"
+version = "1.1.0"
 edition = "2024"
 description = "Project-local formatting and lint orchestration for Python, Go, Rust and TypeScript"
 license = "MIT"
@@ -18,8 +18,7 @@ serde_json = "1.0.154"
 syn = { version = "3.0.9", features = ["full", "parsing"] }
 toml = "1.2.0"
 toml_edit = "0.25.18"
-
-[dev-dependencies]
+semver = "1.0.28"
 tempfile = "3.27.0"
 
 [profile.release]

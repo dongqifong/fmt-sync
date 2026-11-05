@@ -6,7 +6,7 @@ use clap::{Parser, Subcommand};
 use crate::{
     adapters,
     config::{Config, Language},
-    init, report,
+    init, report, update,
 };
 
 #[derive(Parser)]
@@ -32,6 +32,8 @@ enum Action {
     Format,
     /// Check formatting and lint without modifying source files
     Check,
+    /// Update to the latest stable release by compiling with Cargo
+    Update,
 }
 
 pub fn run() -> i32 {
@@ -47,6 +49,9 @@ pub fn run() -> i32 {
 }
 
 fn dispatch(cli: Cli) -> Result<i32> {
+    if matches!(cli.command, Action::Update) {
+        return Ok(update::run());
+    }
     let root = std::env::current_dir()?;
     match cli.command {
         Action::Init { lang, preset } => {
@@ -60,5 +65,6 @@ fn dispatch(cli: Cli) -> Result<i32> {
             let results = adapters::execute(&root, &config, matches!(cli.command, Action::Check));
             Ok(report::print(&results))
         }
+        Action::Update => unreachable!(),
     }
 }
