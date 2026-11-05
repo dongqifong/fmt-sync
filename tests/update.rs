@@ -215,7 +215,8 @@ fn redirected_and_no_color_update_statuses_have_no_escape_codes() {
             &[
                 ("FAKE_GIT_TAGS", tags),
                 ("FAKE_CARGO_EXIT", exit),
-                ("CLICOLOR_FORCE", "0"),
+                ("CLICOLOR_FORCE", ""),
+                ("NO_COLOR", ""),
             ],
         );
         assert!(!text(&out).contains('\x1b'), "{}", text(&out));

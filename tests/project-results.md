@@ -43,6 +43,20 @@ $env:FMT_SYNC_SMOKE_TOOL_PATH = "$PWD/.scratch/venv/Scripts;$PWD/.scratch/biome/
 cargo test --locked --test project_cases -- --ignored --nocapture
 ```
 
-The new project cases are included in the Windows/Linux/macOS CI workflow. Hosted CI and macOS have not been executed locally.
+The project cases are included in the Windows/Linux CI workflow. Hosted CI has not been executed locally.
 
 The existing ordinary suite, six actual-tool smoke tests, Clippy and release builds also passed on both locally tested platforms after the native-default adjustment.
+
+## Full suite and CI — 2026-11-05
+
+The current full suite passed locally on Windows (68 tests) and Ubuntu under WSL (69 tests, including one Unix-only symlink test), with no ignored tests:
+
+```sh
+cargo test --locked --all-targets -- --include-ignored
+```
+
+Both platforms used actual Ruff, Go/gofmt/go vet, Rust/Cargo/rustfmt/Clippy, and Biome for all five project fixtures and all 13 native-tool smoke tests. These cover initialization, failing checks, actual formatting changes, expected remaining lint diagnostics, successful corrected checks, repeated formatting, project exclusions and build/cache handling.
+
+Three additional `update_real.rs` cases passed on both platforms: real Cargo installation of a newer local Git tag, an already-current tag without compilation, and a compilation error that preserves the old executable. The Git repository, URL rewrite configuration, Cargo home, installation root and build output are isolated in temporary directories; only file-protocol Git access is permitted.
+
+The CI workflow now installs the native tools and includes all previously ignored integration cases. GitHub-hosted runner results will be available after the workflow is pushed to main.
